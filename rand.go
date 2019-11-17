@@ -12,7 +12,7 @@ import (
 RandIntN generates a number between min and max (inclusive).
 Only works with positive numbers.
 */
-func RandIntN(min int, max int) (int, error) {
+func RandIntN(min, max int) (int, error) {
 	if min < 0 {
 		return 0, fmt.Errorf("min must be a positive number")
 	}
@@ -34,7 +34,7 @@ func RandIntN(min int, max int) (int, error) {
 
 // Adapted from https://elithrar.github.io/article/generating-secure-random-numbers-crypto-rand/
 
-func init() {
+func init() { // nolint:gochecknoinits
 	assertAvailablePRNG()
 }
 

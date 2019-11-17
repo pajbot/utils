@@ -54,18 +54,18 @@ func CustomDurationString(diff time.Duration, numParts int, glue string) string 
 
 		value := diff
 		if mag.DivBy != -1 {
-			value = value / mag.DivBy
+			value /= mag.DivBy
 		}
 		if mag.ModBy != -1 {
-			value = value % mag.ModBy
+			value %= mag.ModBy
 		}
 		if value > 0 {
 			part := fmt.Sprintf("%d %s", value, mag.Name)
 			if value > 1 {
-				part = part + "s"
+				part += "s"
 			}
 
-			diff = diff - (value * mag.DivBy)
+			diff -= value * mag.DivBy
 
 			parts = append(parts, part)
 			partIndex++
@@ -99,8 +99,6 @@ func TimeSince(t2 time.Time) string {
 func DurationString(diff time.Duration) string {
 	return CustomDurationString(diff, 2, " ")
 }
-
-var errLeadingInt = errors.New("time: bad [0-9]*") // never printed
 
 // leadingInt consumes the leading [0-9]* from s.
 func leadingInt(s string) (x int64, rem string, err error) {
@@ -167,11 +165,93 @@ var unitMap = map[string]int64{
 	"w":  int64(7 * 24 * time.Hour),
 }
 
+func consumeUnit(orig string) (unit int64, s string, err error) {
+	s = orig
+
+	i := 0
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c == '.' || c >= '0' && c <= '9' {
+			break
+		}
+	}
+	if i == 0 {
+		err = errors.New("time: missing unit in duration ")
+		return
+	}
+	u := s[:i]
+	s = s[i:]
+	unit, ok := unitMap[u]
+	if !ok {
+		err = errUnknownUnit
+		return
+	}
+
+	return
+}
+
+var (
+	errA           = errors.New("no digits")
+	errLeadingInt  = errors.New("time: bad [0-9]*")
+	errUnknownUnit = errors.New("unknown unit")
+)
+
+func parseDurationPart(part string) (v, f, unit int64, scale float64, s string, err error) {
+	scale = 1.0
+	s = part
+	// The next character must be [0-9.]
+	if !(s[0] == '.' || s[0] >= '0' && s[0] <= '9') {
+		err = errors.New("bad first character")
+		return
+	}
+
+	// Consume leading integer [0-9]*
+	pl := len(s)
+	v, s, err = leadingInt(s)
+	if err != nil {
+		return
+	}
+
+	// Consume fraction part of string (\.[0-9]*)?
+	post := false
+	if s != "" && s[0] == '.' {
+		s = s[1:]
+		pl = len(s)
+		f, scale, s = leadingFraction(s)
+		post = pl != len(s)
+	}
+	pre := pl != len(s) // whether we consumed anything before a period
+	if !pre && !post {
+		// no digits (e.g. ".s" or "-.s")
+		err = errA
+		return
+	}
+
+	// Consume unit part of string
+	unit, s, err = consumeUnit(s)
+	if err != nil {
+		return
+	}
+
+	if v > (1<<63-1)/unit {
+		// overflow
+		err = errors.New("time: invalid duration ")
+		return
+	}
+	v *= unit
+
+	return
+}
+
 func ParseDuration(s string) (time.Duration, error) {
 	// [-+]?([0-9]*(\.[0-9]*)?[a-z]+)+
 	orig := s
 	var d int64
 	neg := false
+
+	if s == "" {
+		return 0, errors.New("time: invalid duration " + orig)
+	}
 
 	// Consume [-+]?
 	if s != "" {
@@ -181,68 +261,24 @@ func ParseDuration(s string) (time.Duration, error) {
 			s = s[1:]
 		}
 	}
+
 	// Special case: if all that is left is "0", this is zero.
 	if s == "0" {
 		return 0, nil
 	}
-	if s == "" {
-		return 0, errors.New("time: invalid duration " + orig)
-	}
+
 	for s != "" {
 		var (
-			v, f  int64       // integers before, after decimal point
-			scale float64 = 1 // value = v + f/scale
+			v, f, unit int64
+			scale      float64
+			err        error
 		)
 
-		var err error
-
-		// The next character must be [0-9.]
-		if !(s[0] == '.' || '0' <= s[0] && s[0] <= '9') {
-			return 0, errors.New("time: invalid duration " + orig)
-		}
-		// Consume [0-9]*
-		pl := len(s)
-		v, s, err = leadingInt(s)
+		v, f, unit, scale, s, err = parseDurationPart(s)
 		if err != nil {
-			return 0, errors.New("time: invalid duration " + orig)
-		}
-		pre := pl != len(s) // whether we consumed anything before a period
-
-		// Consume (\.[0-9]*)?
-		post := false
-		if s != "" && s[0] == '.' {
-			s = s[1:]
-			pl := len(s)
-			f, scale, s = leadingFraction(s)
-			post = pl != len(s)
-		}
-		if !pre && !post {
-			// no digits (e.g. ".s" or "-.s")
-			return 0, errors.New("time: invalid duration " + orig)
+			return 0, err
 		}
 
-		// Consume unit.
-		i := 0
-		for ; i < len(s); i++ {
-			c := s[i]
-			if c == '.' || '0' <= c && c <= '9' {
-				break
-			}
-		}
-		if i == 0 {
-			return 0, errors.New("time: missing unit in duration " + orig)
-		}
-		u := s[:i]
-		s = s[i:]
-		unit, ok := unitMap[u]
-		if !ok {
-			return 0, errors.New("time: unknown unit " + u + " in duration " + orig)
-		}
-		if v > (1<<63-1)/unit {
-			// overflow
-			return 0, errors.New("time: invalid duration " + orig)
-		}
-		v *= unit
 		if f > 0 {
 			// float64 is needed to be nanosecond accurate for fractions of hours.
 			// v >= 0 && (f*unit/scale) <= 3.6e+12 (ns/h, h is the largest unit)

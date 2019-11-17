@@ -6,6 +6,6 @@ func BoolPtr(v bool) *bool {
 }
 
 // CheckFlag returns true if the given flag is enabled in the value
-func CheckFlag(value uint32, flag uint32) bool {
+func CheckFlag(value, flag uint32) bool {
 	return (value & flag) != 0
 }

@@ -74,8 +74,8 @@ func lowercaseAll(in []string) []string {
 }
 
 // MakeVariations makes normal-case and lowercase variatinos of a string
-func MakeVariations(text string, doNormalize bool) ([]string, []string, error) {
-	originalVariations := []string{
+func MakeVariations(text string, doNormalize bool) (originalVariations, lowercasedVariations []string, err error) {
+	originalVariations = []string{
 		// Full message
 		text,
 	}
@@ -211,8 +211,8 @@ func GetTriggersKC(message string) []string {
 
 // RemoveNewlines replaces all \r and \n with spaces
 func RemoveNewlines(s string) string {
-	s = strings.Replace(s, "\r", " ", -1)
-	s = strings.Replace(s, "\n", " ", -1)
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
 	return s
 }
 
