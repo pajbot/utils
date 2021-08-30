@@ -61,7 +61,7 @@ func CustomDurationString(diff time.Duration, numParts int, glue string) string 
 		}
 		if value > 0 {
 			part := fmt.Sprintf("%d %s", value, mag.Name)
-			if value > 1 {
+			if value != 1 {
 				part += "s"
 			}
 
