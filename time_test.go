@@ -110,6 +110,10 @@ func TestCustomRelTime(t *testing.T) {
 	testCustomRelTime(t, t1, t2, 3, " ", "4 minutes 3 seconds")
 
 	t1, _ = time.Parse(timeFormat, "Mon Jan 3 15:04:05.000")
+	t2, _ = time.Parse(timeFormat, "Mon Jan 3 15:00:04.000")
+	testCustomRelTime(t, t1, t2, 3, " ", "4 minutes 1 second")
+
+	t1, _ = time.Parse(timeFormat, "Mon Jan 3 15:04:05.000")
 	t2, _ = time.Parse(timeFormat, "Mon Jan 3 15:00:02.001")
 	testCustomRelTime(t, t1, t2, 3, " ", "4 minutes 2 seconds")
 
